@@ -152,6 +152,7 @@ export const GameBoard: React.FC = () => {
       <canvas
         ref={canvasRef}
         className="w-full h-full cursor-pointer z-0"
+        style={{ pointerEvents: gameState.isRunning ? 'auto' : 'none' }}
       />
       {!gameState.isRunning && (
         <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm z-10">
