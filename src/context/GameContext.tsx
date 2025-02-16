@@ -11,10 +11,10 @@ interface Snake {
 interface GameState {
   isRunning: boolean;
   snakes: Snake[];
-  food: Position;
+  food: Position[];
   scores: number[];
   speed: number;
-  snakeColors: [string, string];
+  snakeColors: string[];
 }
 
 interface GameContextType {
@@ -22,10 +22,23 @@ interface GameContextType {
   startGame: () => void;
   updateGame: () => void;
   updateSettings: (settings: Partial<Pick<GameState, 'speed' | 'snakeColors'>>) => void;
-  setFoodPosition: (position: Position) => void;
+  addFoodPosition: (position: Position) => void;
 }
 
-export const GameContext = createContext<GameContextType>({} as GameContextType);
+export const GameContext = createContext<GameContextType>({
+  gameState: {
+    isRunning: false,
+    snakes: [{ body: [[10, 10]], direction: 'RIGHT' }, { body: [[20, 20]], direction: 'LEFT' }],
+    food: [],
+    scores: [0, 0],
+    speed: 100,
+    snakeColors: ['#00FF00', '#0000FF'],
+  },
+  startGame: () => {},
+  updateGame: () => {},
+  updateSettings: () => {},
+  addFoodPosition: () => {},
+});
 
 const GRID_WIDTH = 40;
 const GRID_HEIGHT = 30;
@@ -70,7 +83,7 @@ const createInitialState = (): GameState => {
   return {
     isRunning: false,
     snakes,
-    food: generateFood(snakes),
+    food: [],
     scores: [0, 0],
     speed: 100,
     snakeColors: ['#4ade80', '#60a5fa']
@@ -87,14 +100,12 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }));
   }, []);
 
-  const setFoodPosition = useCallback((position: Position) => {
-    if (gameState.isRunning) {
-      setGameState(prev => ({
-        ...prev,
-        food: position
-      }));
-    }
-  }, [gameState.isRunning]);
+  const addFoodPosition = useCallback((position: Position) => {
+    setGameState(prev => ({
+      ...prev,
+      food: [...prev.food, position]
+    }));
+  }, []);
 
   // Helper function to determine if a move is safe
   const isSafeMove = (position: Position, snakes: Snake[]): boolean => {
@@ -170,7 +181,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       // Update snake directions using AI
       newState.snakes = prev.snakes.map((snake, index) => {
         const otherSnake = prev.snakes[index === 0 ? 1 : 0];
-        const newDirection = getNextDirection(snake, prev.food, otherSnake);
+        const newDirection = getNextDirection(snake, prev.food[0], otherSnake);
         return { ...snake, direction: newDirection };
       });
       
@@ -194,9 +205,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         const newBody = [head];
         
         // Check if snake ate food
-        if (head[0] === prev.food[0] && head[1] === prev.food[1]) {
+        if (head[0] === prev.food[0][0] && head[1] === prev.food[0][1]) {
           newBody.push(...snake.body);
-          newFood = generateFood(newState.snakes);
+          newFood = [generateFood(newState.snakes)];
           newScores[snakeIndex] += 1;
         } else {
           newBody.push(...snake.body.slice(0, -1));
@@ -237,7 +248,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   return (
-    <GameContext.Provider value={{ gameState, startGame, updateGame, updateSettings, setFoodPosition }}>
+    <GameContext.Provider value={{ gameState, startGame, updateGame, updateSettings, addFoodPosition }}>
       {children}
     </GameContext.Provider>
   );

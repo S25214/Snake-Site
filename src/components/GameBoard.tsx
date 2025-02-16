@@ -5,7 +5,7 @@ import { Play } from 'lucide-react';
 export const GameBoard: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const { gameState, startGame, updateGame, setFoodPosition } = useContext(GameContext);
+  const { gameState, startGame, updateGame, addFoodPosition } = useContext(GameContext);
   
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -24,6 +24,8 @@ export const GameBoard: React.FC = () => {
     if (!ctx) return;
 
     const cellSize = Math.min(canvas.width / 40, canvas.height / 30);
+    const gridWidth = Math.floor(canvas.width / cellSize);
+    const gridHeight = Math.floor(canvas.height / cellSize);
 
     const handleClick = (e: MouseEvent) => {
       if (!gameState.isRunning) return;
@@ -33,8 +35,8 @@ export const GameBoard: React.FC = () => {
       const y = Math.floor((e.clientY - rect.top) / cellSize);
       
       // Ensure click is within grid bounds
-      if (x >= 0 && x < 40 && y >= 0 && y < 30) {
-        setFoodPosition([x, y]);
+      if (x >= 0 && x < gridWidth && y >= 0 && y < gridHeight) {
+        addFoodPosition([x, y]);
       }
     };
 
@@ -94,14 +96,16 @@ export const GameBoard: React.FC = () => {
       ctx.shadowColor = '#ef4444';
       ctx.shadowBlur = 20 * pulse;
       ctx.fillStyle = '#f87171';
-      const foodSize = (cellSize - 4) * pulse;
-      const foodOffset = (cellSize - foodSize) / 2;
-      ctx.fillRect(
-        gameState.food[0] * cellSize + foodOffset,
-        gameState.food[1] * cellSize + foodOffset,
-        foodSize,
-        foodSize
-      );
+      gameState.food.forEach(([x, y]) => {
+        const foodSize = (cellSize - 4) * pulse;
+        const foodOffset = (cellSize - foodSize) / 2;
+        ctx.fillRect(
+          x * cellSize + foodOffset,
+          y * cellSize + foodOffset,
+          foodSize,
+          foodSize
+        );
+      });
 
       // Reset shadow
       ctx.shadowBlur = 0;
@@ -122,7 +126,7 @@ export const GameBoard: React.FC = () => {
       window.removeEventListener('resize', resizeCanvas);
       canvas.removeEventListener('click', handleClick);
     };
-  }, [gameState, updateGame, setFoodPosition]);
+  }, [gameState, updateGame, addFoodPosition]);
 
   return (
     <div ref={containerRef} className="fixed inset-0 pt-20">
