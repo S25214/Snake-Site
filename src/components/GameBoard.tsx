@@ -151,10 +151,10 @@ export const GameBoard: React.FC = () => {
     <div ref={containerRef} className="fixed inset-0 pt-20">
       <canvas
         ref={canvasRef}
-        className="w-full h-full cursor-pointer"
+        className="w-full h-full cursor-pointer z-0"
       />
       {!gameState.isRunning && (
-        <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+        <div className="absolute inset-0 flex items-center justify-center bg-black/60 backdrop-blur-sm z-10">
           <button
             onClick={startGame}
             className="group relative px-8 py-4 bg-gradient-to-r from-purple-600 to-pink-600 rounded-lg font-bold text-xl transition-all duration-300 hover:scale-105 hover:shadow-[0_0_30px_rgba(168,85,247,0.5)] focus:outline-none focus:ring-2 focus:ring-purple-500 focus:ring-offset-2 focus:ring-offset-gray-900"
