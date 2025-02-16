@@ -1,12 +1,15 @@
-import React, { useEffect, useRef, useContext } from 'react';
+import React, { useEffect, useRef, useContext, useState } from 'react';
 import { GameContext } from '../context/GameContext';
 import { Play } from 'lucide-react';
 
 export const GameBoard: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const { gameState, startGame, updateGame, addFoodPosition } = useContext(GameContext);
-  
+  const { gameState, startGame, updateGame, setFoodPosition } = useContext(GameContext);
+  const [cellSize, setCellSize] = useState(0);
+  const [isMouseDown, setIsMouseDown] = useState(false);
+  const [mousePosition, setMousePosition] = useState<[number, number] | null>(null);
+
   useEffect(() => {
     const canvas = canvasRef.current;
     const container = containerRef.current;
@@ -15,6 +18,8 @@ export const GameBoard: React.FC = () => {
     const resizeCanvas = () => {
       canvas.width = container.clientWidth;
       canvas.height = container.clientHeight;
+      // Dynamically calculate cellSize based on the container dimensions
+      setCellSize(Math.min(canvas.width / 40, canvas.height / 30));
     };
 
     resizeCanvas();
@@ -23,24 +28,35 @@ export const GameBoard: React.FC = () => {
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
 
-    const cellSize = Math.min(canvas.width / 40, canvas.height / 30);
-    const gridWidth = Math.floor(canvas.width / cellSize);
-    const gridHeight = Math.floor(canvas.height / cellSize);
-
-    const handleClick = (e: MouseEvent) => {
+    const handleMouseDown = (e: MouseEvent) => {
       if (!gameState.isRunning) return;
-      
+      setIsMouseDown(true);
+      handleMouseMove(e); // Initial food placement
+    };
+
+    const handleMouseUp = () => {
+      setIsMouseDown(false);
+      setMousePosition(null);
+    };
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!gameState.isRunning || !isMouseDown) return;
+
       const rect = canvas.getBoundingClientRect();
       const x = Math.floor((e.clientX - rect.left) / cellSize);
       const y = Math.floor((e.clientY - rect.top) / cellSize);
-      
+
       // Ensure click is within grid bounds
-      if (x >= 0 && x < gridWidth && y >= 0 && y < gridHeight) {
-        addFoodPosition([x, y]);
+      if (x >= 0 && x < 40 && y >= 0 && y < 30) {
+        setMousePosition([x, y]);
+        setFoodPosition([x, y]);
       }
     };
 
-    canvas.addEventListener('click', handleClick);
+    canvas.addEventListener('mousedown', handleMouseDown);
+    canvas.addEventListener('mouseup', handleMouseUp);
+    canvas.addEventListener('mousemove', handleMouseMove);
+    window.addEventListener('mouseup', handleMouseUp); // Global mouse up listener
 
     const render = () => {
       // Clear canvas with a gradient background
@@ -91,17 +107,17 @@ export const GameBoard: React.FC = () => {
       });
 
       // Draw food with pulsing effect
-      const time = Date.now() * 0.005;
-      const pulse = Math.sin(time) * 0.2 + 0.8;
-      ctx.shadowColor = '#ef4444';
-      ctx.shadowBlur = 20 * pulse;
-      ctx.fillStyle = '#f87171';
-      gameState.food.forEach(([x, y]) => {
+      gameState.food.forEach((foodItem) => {
+        const time = Date.now() * 0.005;
+        const pulse = Math.sin(time) * 0.2 + 0.8;
+        ctx.shadowColor = '#ef4444';
+        ctx.shadowBlur = 20 * pulse;
+        ctx.fillStyle = '#f87171';
         const foodSize = (cellSize - 4) * pulse;
         const foodOffset = (cellSize - foodSize) / 2;
         ctx.fillRect(
-          x * cellSize + foodOffset,
-          y * cellSize + foodOffset,
+          foodItem[0] * cellSize + foodOffset,
+          foodItem[1] * cellSize + foodOffset,
           foodSize,
           foodSize
         );
@@ -124,9 +140,12 @@ export const GameBoard: React.FC = () => {
     return () => {
       clearInterval(interval);
       window.removeEventListener('resize', resizeCanvas);
-      canvas.removeEventListener('click', handleClick);
+      canvas.removeEventListener('mousedown', handleMouseDown);
+      canvas.removeEventListener('mouseup', handleMouseUp);
+      canvas.removeEventListener('mousemove', handleMouseMove);
+      window.removeEventListener('mouseup', handleMouseUp);
     };
-  }, [gameState, updateGame, addFoodPosition]);
+  }, [gameState, updateGame, setFoodPosition, cellSize]);
 
   return (
     <div ref={containerRef} className="fixed inset-0 pt-20">

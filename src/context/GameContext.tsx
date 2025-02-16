@@ -11,10 +11,10 @@ interface Snake {
 interface GameState {
   isRunning: boolean;
   snakes: Snake[];
-  food: Position[];
+  food: Position[]; // Changed to array of positions
   scores: number[];
   speed: number;
-  snakeColors: string[];
+  snakeColors: [string, string];
 }
 
 interface GameContextType {
@@ -22,23 +22,11 @@ interface GameContextType {
   startGame: () => void;
   updateGame: () => void;
   updateSettings: (settings: Partial<Pick<GameState, 'speed' | 'snakeColors'>>) => void;
-  addFoodPosition: (position: Position) => void;
+  setFoodPosition: (position: Position) => void;
+  removeFood: (position: Position) => void;
 }
 
-export const GameContext = createContext<GameContextType>({
-  gameState: {
-    isRunning: false,
-    snakes: [{ body: [[10, 10]], direction: 'RIGHT' }, { body: [[20, 20]], direction: 'LEFT' }],
-    food: [],
-    scores: [0, 0],
-    speed: 100,
-    snakeColors: ['#00FF00', '#0000FF'],
-  },
-  startGame: () => {},
-  updateGame: () => {},
-  updateSettings: () => {},
-  addFoodPosition: () => {},
-});
+export const GameContext = createContext<GameContextType>({} as GameContextType);
 
 const GRID_WIDTH = 40;
 const GRID_HEIGHT = 30;
@@ -51,19 +39,22 @@ const generateRandomPosition = (): Position => {
   ];
 };
 
-// Helper function to check if position is occupied by snakes
-const isPositionOccupied = (position: Position, snakes: Snake[]): boolean => {
-  return snakes.some(snake => 
-    snake.body.some(([sx, sy]) => sx === position[0] && sy === position[1])
+// Helper function to check if position is occupied by snakes or other food
+const isPositionOccupied = (position: Position, snakes: Snake[], food: Position[]): boolean => {
+  return (
+    snakes.some((snake) =>
+      snake.body.some(([sx, sy]) => sx === position[0] && sy === position[1])
+    ) ||
+    food.some(([fx, fy]) => fx === position[0] && fy === position[1])
   );
 };
 
-// Generate food position that doesn't overlap with snakes
-const generateFood = (snakes: Snake[]): Position => {
+// Generate food position that doesn't overlap with snakes or other food
+const generateFood = (snakes: Snake[], currentFood: Position[]): Position => {
   let position: Position;
   do {
     position = generateRandomPosition();
-  } while (isPositionOccupied(position, snakes));
+  } while (isPositionOccupied(position, snakes, currentFood));
   return position;
 };
 
@@ -83,7 +74,7 @@ const createInitialState = (): GameState => {
   return {
     isRunning: false,
     snakes,
-    food: [],
+    food: [generateFood(snakes, [])], // Initialize with one food item
     scores: [0, 0],
     speed: 100,
     snakeColors: ['#4ade80', '#60a5fa']
@@ -100,10 +91,21 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     }));
   }, []);
 
-  const addFoodPosition = useCallback((position: Position) => {
+  const setFoodPosition = useCallback((position: Position) => {
+    if (gameState.isRunning) {
+      setGameState(prev => ({
+        ...prev,
+        food: [...prev.food, position] // Add new food to array
+      }));
+    }
+  }, [gameState.isRunning]);
+
+  const removeFood = useCallback((position: Position) => {
     setGameState(prev => ({
       ...prev,
-      food: [...prev.food, position]
+      food: prev.food.filter(
+        (foodItem) => foodItem[0] !== position[0] || foodItem[1] !== position[1]
+      )
     }));
   }, []);
 
@@ -134,10 +136,9 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   // AI function to determine next direction for a snake
-  const getNextDirection = (snake: Snake, food: Position, otherSnake: Snake): Direction => {
+  const getNextDirection = (snake: Snake, food: Position[], otherSnake: Snake): Direction => {
     const head = snake.body[0];
     const [hx, hy] = head;
-    const [fx, fy] = food;
     
     // List of possible directions
     const directions: Direction[] = ['UP', 'DOWN', 'LEFT', 'RIGHT'];
@@ -159,11 +160,16 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
       return snake.direction; // Keep current direction if no safe moves
     }
 
-    // Score each direction based on distance to food
+    // Score each direction based on distance to the closest food
     const directionScores = validDirections.map(dir => {
       const [nx, ny] = getNextPosition(head, dir);
-      const distanceToFood = Math.abs(nx - fx) + Math.abs(ny - fy);
-      return { direction: dir, score: -distanceToFood };
+      // Find the closest food
+      let minDistance = Infinity;
+      food.forEach(([fx, fy]) => {
+        const distanceToFood = Math.abs(nx - fx) + Math.abs(ny - fy);
+        minDistance = Math.min(minDistance, distanceToFood);
+      });
+      return { direction: dir, score: -minDistance };
     });
 
     // Choose the direction with the highest score
@@ -176,12 +182,12 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setGameState(prev => {
       const newState = { ...prev };
       const newScores = [...prev.scores];
-      let newFood = prev.food;
+      let newFood = [...prev.food];
       
       // Update snake directions using AI
       newState.snakes = prev.snakes.map((snake, index) => {
         const otherSnake = prev.snakes[index === 0 ? 1 : 0];
-        const newDirection = getNextDirection(snake, prev.food[0], otherSnake);
+        const newDirection = getNextDirection(snake, prev.food, otherSnake);
         return { ...snake, direction: newDirection };
       });
       
@@ -203,13 +209,21 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
         }
 
         const newBody = [head];
+        let ateFood = false;
         
         // Check if snake ate food
-        if (head[0] === prev.food[0][0] && head[1] === prev.food[0][1]) {
-          newBody.push(...snake.body);
-          newFood = [generateFood(newState.snakes)];
-          newScores[snakeIndex] += 1;
-        } else {
+        for (let i = 0; i < newFood.length; i++) {
+          if (head[0] === newFood[i][0] && head[1] === newFood[i][1]) {
+            newBody.push(...snake.body);
+            newFood.splice(i, 1); // Remove the eaten food
+            newFood.push(generateFood(newState.snakes, newFood));
+            newScores[snakeIndex] += 1;
+            ateFood = true;
+            break; // Exit loop after eating food
+          }
+        }
+        
+        if (!ateFood) {
           newBody.push(...snake.body.slice(0, -1));
         }
 
@@ -248,7 +262,7 @@ export const GameProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }, []);
 
   return (
-    <GameContext.Provider value={{ gameState, startGame, updateGame, updateSettings, addFoodPosition }}>
+    <GameContext.Provider value={{ gameState, startGame, updateGame, updateSettings, setFoodPosition, removeFood }}>
       {children}
     </GameContext.Provider>
   );
